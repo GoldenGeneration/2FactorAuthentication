@@ -1,5 +1,8 @@
 import bcrypt from "bcryptjs";
 import User from "../models/user.js";
+import speakeasy from "speakeasy";
+import qrCode from "qrcode";
+import jwt from "jsonwebtoken";
 
 export const register = async (req, res) => {
   try {
@@ -51,6 +54,65 @@ export const logout = async (req, res) => {
     res.status(200).json({ message: "Logout Successful" });
   });
 };
-export const setup2FA = async (req, res) => {};
-export const verify2FA = async (req, res) => {};
-export const reset2FA = async (req, res) => {};
+export const setup2FA = async (req, res) => {
+  try {
+    console.log("The req.uer is : ", req.user);
+    const user = req.user;
+    var secret = speakeasy.generateSecret();
+    console.log("The secret object is : ", secret);
+    user.twoFactorSecret = secret.base32;
+    user.isMfaActive = true;
+
+    await user.save();
+
+    const url = speakeasy.otpauthURL({
+      secret: secret.base32,
+      label: `${req.user.username}`,
+      issuer: "www.webmath.com",
+      encoding: "base32",
+    });
+
+    const qrImageUrl = await qrCode.toDataURL(url);
+    res.status(200).json({
+      secret: secret.base32, // not recomended to pass, only for dev-environment
+      qrCode: qrImageUrl,
+    });
+  } catch (error) {
+    res.status(401).json({ error: "Error setting up 2FA", message: error });
+  }
+};
+export const verify2FA = async (req, res) => {
+  const { token } = req.body;
+  const user = req.user;
+
+  const verified = speakeasy.totp.verify({
+    secret: user.twoFactorSecret, // should not be passed during production
+    encoding: "base32",
+    token,
+  });
+
+  if (verified) {
+    const jwtToken = jwt.sign(
+      { username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1hr" }
+    );
+    res
+      .status(200)
+      .json({ message: "2FA verification successful", token: jwtToken });
+  } else {
+    res.status(400).json({ message: "Invalid 2FA Token" });
+  }
+};
+
+export const reset2FA = async (req, res) => {
+  try {
+    const user = req.user;
+    user.twoFactorSecret = "";
+    user.isMfaActive = false;
+    await user.save();
+    res.status(200).json({ message: "2FA reset successful" });
+  } catch (error) {
+    res.status(500).json({error: "Error resetting 2FA", message: error})
+  }
+};
