@@ -31,8 +31,26 @@ export const login = async (req, res) => {
     res.status(500).json({ error: "Error login credentials", message: error });
   }
 };
-export const authStatus = (req, res) => {};
-export const logout = (req, res) => {};
-export const setup2FA = (req, res) => {};
-export const verify2FA = (req, res) => {};
-export const reset2FA = (req, res) => {};
+export const authStatus = async (req, res) => {
+  if (req.user) {
+    res.status(200).json({
+      message: "User logged",
+      username: req.user.username,
+      isMfaActive: req.user.isMfaActive,
+    });
+  } else {
+    res.status(401).json({ message: "Unauthorized User" });
+  }
+};
+export const logout = async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized User" });
+  }
+  req.logout((err) => {
+    if (err) res.status(401).json({ message: "User not logged in." });
+    res.status(200).json({ message: "Logout Successful" });
+  });
+};
+export const setup2FA = async (req, res) => {};
+export const verify2FA = async (req, res) => {};
+export const reset2FA = async (req, res) => {};
